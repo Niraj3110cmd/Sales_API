@@ -4,69 +4,119 @@ import random
 
 app = Flask(__name__)
 
-# Sample sales data generator
 def generate_sales_data():
-    products = ["Laptop", "Phone", "Tablet", "Monitor", "Keyboard", "Mouse", "Headphones"]
-    regions = ["North", "South", "East", "West"]
+    """Generate random sales data for entire year 2024"""
+    products = ['Laptop', 'Mouse', 'Keyboard', 'Monitor', 'Headphones', 'Webcam', 'USB Cable', 'Phone', 'Tablet', 'Charger', 'SSD', 'RAM']
+    regions = ['North', 'South', 'East', 'West', 'Central']
+    salespersons = ['John Smith', 'Sarah Johnson', 'Mike Brown', 'Emily Davis', 'Chris Wilson', 'Anna Lee', 'David Miller']
+    
     sales_data = []
     
-    # Generate last 30 days of sales
-    for i in range(30):
-        date = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
-        for _ in range(random.randint(5, 15)):  # Random number of sales per day
+    # Fixed dates: January 1, 2024 to December 31, 2024
+    start_date = datetime(2024, 1, 1)
+    end_date = datetime(2024, 12, 31)
+    
+    # Calculate total days in 2024 (366 days - leap year)
+    total_days = (end_date - start_date).days + 1
+    
+    # Generate 3-5 sales per day for entire year
+    current_date = start_date
+    while current_date <= end_date:
+        num_sales_today = random.randint(3, 5)
+        
+        for _ in range(num_sales_today):
+            product = random.choice(products)
+            quantity = random.randint(1, 10)
+            price = round(random.uniform(10, 1000), 2)
+            
             sale = {
-                "date": date,
-                "product": random.choice(products),
-                "region": random.choice(regions),
-                "quantity": random.randint(1, 10),
-                "unit_price": round(random.uniform(50, 1500), 2),
-                "customer_id": f"CUST{random.randint(1000, 9999)}",
-                "salesperson": f"SP{random.randint(1, 20)}"
+                'date': current_date.strftime('%Y-%m-%d'),
+                'product': product,
+                'region': random.choice(regions),
+                'quantity': quantity,
+                'price': price,
+                'total': round(quantity * price, 2),
+                'customer_id': f'CUST{random.randint(1000, 9999)}',
+                'salesperson': random.choice(salespersons)
             }
-            sale["total_amount"] = round(sale["quantity"] * sale["unit_price"], 2)
             sales_data.append(sale)
+        
+        current_date += timedelta(days=1)
     
     return sales_data
 
-# API endpoint for sales data
 @app.route('/')
 def home():
-    return """
-    <h1>Sales Data API</h1>
-    <p>Available endpoints:</p>
-    <ul>
-        <li><a href="/api/sales">/api/sales</a> - Get all sales data (JSON)</li>
-        <li><a href="/api/sales/summary">/api/sales/summary</a> - Get sales summary</li>
-    </ul>
-    """
-
-@app.route('/api/sales')
-def get_sales():
-    sales_data = generate_sales_data()
     return jsonify({
-        "status": "success",
-        "timestamp": datetime.now().isoformat(),
-        "total_records": len(sales_data),
-        "data": sales_data
-    })
-
-@app.route('/api/sales/summary')
-def get_summary():
-    sales_data = generate_sales_data()
-    
-    total_sales = sum(sale["total_amount"] for sale in sales_data)
-    total_quantity = sum(sale["quantity"] for sale in sales_data)
-    
-    return jsonify({
-        "status": "success",
-        "timestamp": datetime.now().isoformat(),
-        "summary": {
-            "total_sales_amount": round(total_sales, 2),
-            "total_quantity_sold": total_quantity,
-            "total_transactions": len(sales_data),
-            "average_transaction_value": round(total_sales / len(sales_data), 2)
+        'message': 'Sales API is running!',
+        'data_period': '2024-01-01 to 2024-12-31',
+        'endpoints': {
+            'all_sales': '/api/sales',
+            'summary': '/api/sales/summary',
+            'monthly': '/api/sales/monthly'
         }
     })
 
+@app.route('/api/sales')
+def get_sales():
+    """Return all sales data for 2024"""
+    return jsonify(generate_sales_data())
+
+@app.route('/api/sales/summary')
+def get_summary():
+    """Return sales summary statistics for 2024"""
+    sales_data = generate_sales_data()
+    
+    total_sales = sum(sale['total'] for sale in sales_data)
+    total_quantity = sum(sale['quantity'] for sale in sales_data)
+    avg_sale = total_sales / len(sales_data) if sales_data else 0
+    
+    summary = {
+        'total_records': len(sales_data),
+        'total_sales_value': round(total_sales, 2),
+        'total_quantity_sold': total_quantity,
+        'average_sale_value': round(avg_sale, 2),
+        'date_range': {
+            'start': '2024-01-01',
+            'end': '2024-12-31'
+        }
+    }
+    
+    return jsonify(summary)
+
+@app.route('/api/sales/monthly')
+def get_monthly():
+    """Return monthly aggregated sales data"""
+    sales_data = generate_sales_data()
+    
+    # Aggregate by month
+    monthly_data = {}
+    for sale in sales_data:
+        month = sale['date'][:7]  # Extract YYYY-MM
+        if month not in monthly_data:
+            monthly_data[month] = {
+                'month': month,
+                'total_sales': 0,
+                'total_quantity': 0,
+                'record_count': 0
+            }
+        monthly_data[month]['total_sales'] += sale['total']
+        monthly_data[month]['total_quantity'] += sale['quantity']
+        monthly_data[month]['record_count'] += 1
+    
+    # Convert to list and round values
+    result = []
+    for month in sorted(monthly_data.keys()):
+        data = monthly_data[month]
+        result.append({
+            'month': month,
+            'total_sales': round(data['total_sales'], 2),
+            'total_quantity': data['total_quantity'],
+            'record_count': data['record_count'],
+            'average_sale': round(data['total_sales'] / data['record_count'], 2)
+        })
+    
+    return jsonify(result)
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(debug=True)
